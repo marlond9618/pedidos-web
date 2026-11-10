@@ -8,3 +8,10 @@ Documentación del equipo de Pedidos Web.
 
 Los próximos documentos (diagnóstico, plan de migración, gobernanza) se agregan aquí en las unidades siguientes.
 Las specs de cada historia van en `specs/`, no aquí.
+
+## Módulos (`modulos/`)
+Fichas de módulos de `PedidosWeb.Core`, generadas con la Skill `documentar-modulo` (`.claude/skills/documentar-modulo/`).
+
+| Archivo | Módulo |
+|---|---|
+| `modulos/ClientesService.md` | Servicio heredado de fichas de clientes. |
