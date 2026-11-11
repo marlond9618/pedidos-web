@@ -8,15 +8,19 @@ public record ResultadoTotales(decimal Subtotal, decimal BaseDescuento, decimal 
     decimal Descuento, decimal Flete, decimal Neto, decimal Iva, decimal Total);
 
 /// <summary>
-/// Migración fiel de legado/src/UCalculoTotales.pas (Delphi). Replica el cálculo EXACTO,
-/// defectos incluidos, para igualar migracion/golden-master.csv. Dinero en decimal (CLP).
-/// Diferencia con el legado: allá todo era Double; aquí es decimal, aritmética exacta.
+/// Migración de legado/src/UCalculoTotales.pas (Delphi) para igualar migracion/golden-master.csv.
+/// Dinero en decimal (CLP). Replica el cálculo del legado, defectos incluidos, SALVO una
+/// corrección deliberada: R05 (el redondeo al peso). Ver docs/migracion/defectos-corregidos.md.
 /// </summary>
 public static class CalculoTotales
 {
-    /// <summary>Redondeo al peso del legado: Trunc(valor + 0.49). Ojo: NO es redondeo al medio;
-    /// un valor terminado en .50 baja (Trunc(x.99)), solo sube desde .51. (UCalculoTotales.pas:48-51)</summary>
-    private static decimal Calc3(decimal valor) => Math.Truncate(valor + 0.49m);
+    /// <summary>
+    /// Redondeo al peso correcto (medio hacia arriba). CORRIGE R05: el legado usaba
+    /// Calc3 = Trunc(valor + 0.49) (UCalculoTotales.pas:48-51), que redondeaba el 0,50
+    /// hacia ABAJO (10,50 → 10), al revés de lo que dicen sus comentarios. Esta es la
+    /// ÚNICA desviación respecto del legado; cambia 13 casos del golden master.
+    /// </summary>
+    private static decimal RedondearAlPeso(decimal valor) => Math.Round(valor, 0, MidpointRounding.AwayFromZero);
 
     /// <summary>Suma Cantidad*PrecioUnitario de TODAS las líneas, incluidas 'OFE'. Sin redondeo. (:53-60)</summary>
     private static decimal CalcularSubtotal(IReadOnlyList<LineaCalculo> lineas)
@@ -60,17 +64,17 @@ public static class CalculoTotales
         return resultado;
     }
 
-    /// <summary>Flete por región: 11 o 12 recargan 15%; otras, el base. Ambos con Calc3. (:95-101)</summary>
+    /// <summary>Flete por región: 11 o 12 recargan 15%; otras, el base. Ambos con RedondearAlPeso. (:95-101)</summary>
     private static decimal CalcularFlete(decimal fleteBase, int region)
     {
         if (region == 11 || region == 12)
-            return Calc3(fleteBase * 1.15m);
-        return Calc3(fleteBase);
+            return RedondearAlPeso(fleteBase * 1.15m);
+        return RedondearAlPeso(fleteBase);
     }
 
-    /// <summary>IVA sobre (Neto + Flete), con Calc3. (:103-106)</summary>
+    /// <summary>IVA sobre (Neto + Flete), con RedondearAlPeso. (:103-106)</summary>
     private static decimal CalcularIva(decimal neto, decimal flete, decimal tasa)
-        => Calc3((neto + flete) * tasa);
+        => RedondearAlPeso((neto + flete) * tasa);
 
     /// <summary>
     /// Calcula los totales del pedido igual que CalcularTotales en UCalculoTotales.pas (:108-122).
@@ -83,7 +87,7 @@ public static class CalculoTotales
         var subtotal = CalcularSubtotal(lineas);                       // :111
         var baseDescuento = CalcularBaseDescuento(lineas);            // :112
         var porcDescuento = PorcentajeDescuento(baseDescuento, esVip); // :113
-        var descuento = Calc3(baseDescuento * porcDescuento);         // :114 (redondea aquí)
+        var descuento = RedondearAlPeso(baseDescuento * porcDescuento);         // :114 (redondea aquí)
         var neto = subtotal - descuento;                              // :115 (sin redondeo)
         var flete = lineas.Count == 0                                 // :116-119
             ? 0m
