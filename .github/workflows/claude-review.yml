@@ -1,0 +1,47 @@
+# Revisión automática de PRs con Claude · Unidad 7.
+# Corre al abrir, reabrir o marcar listo un PR contra main (no en cada push, para cuidar la cuota).
+# Claude comenta hallazgos; una persona decide y hace merge. Revisión de solo lectura: no edita el código.
+# Requiere la Claude GitHub App instalada y el secreto CLAUDE_CODE_OAUTH_TOKEN (de la U6).
+# El token NUNCA va en este archivo.
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Permisos mínimos: leer el código y comentar el PR. No necesita escribir en el repo.
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    # No revisar borradores: solo PRs listos.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # fetch-depth: 0 trae el historial completo para leer origin/main y diferenciar contra él.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Eres el revisor de código de pedidos-web. Revisa SOLO este pull request.
+            1. Lee las reglas desde main, no desde la rama del PR:
+               `git show origin/main:AGENTS.md` y `git show origin/main:REVIEW.md`.
+            2. Revisa únicamente lo que cambió: `git diff origin/main...HEAD`.
+            3. Aplica REVIEW.md: clasifica cada hallazgo como Importante o Detalle,
+               respeta el tope de detalles y no reportes lo que REVIEW.md excluye.
+            4. Cada hallazgo cita archivo:línea y explica por qué en una frase.
+            5. No edites archivos. Si no hay nada Importante, dilo en una línea.
+            Publica los hallazgos como comentarios del pull request.
+          claude_args: '--max-turns 20 --disallowedTools "Edit,Write,NotebookEdit"'
