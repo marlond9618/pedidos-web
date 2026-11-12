@@ -1,0 +1,47 @@
+name: CI
+
+# Dispara el pipeline en cada push y en cada Pull Request contra main.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Permisos mínimos para todo el workflow: solo lectura del repositorio.
+permissions:
+  contents: read
+
+# Evita ejecuciones duplicadas: cancela una corrida anterior del mismo
+# branch/PR si llega un commit nuevo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build y test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      # 1. Clona el repositorio en el runner.
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      # 2. Instala el SDK de .NET 10 fijado por banda (no un parche concreto).
+      - name: Instalar .NET 10
+        uses: actions/setup-dotnet@v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      # 3. Restaura los paquetes NuGet de la solución.
+      - name: Restore
+        run: dotnet restore PedidosWeb.sln
+
+      # 4. Compila sin volver a restaurar, en configuración Release.
+      - name: Build
+        run: dotnet build PedidosWeb.sln --configuration Release --no-restore
+
+      # 5. Ejecuta los tests sin recompilar, reutilizando el build anterior.
+      - name: Test
+        run: dotnet test PedidosWeb.sln --configuration Release --no-build --verbosity normal
